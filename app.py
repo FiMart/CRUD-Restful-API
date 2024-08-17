@@ -1,76 +1,62 @@
+import os
 from flask import Flask, jsonify, request
-import mysql.connector
+from flask_mysqldb import MySQL
 
 app = Flask(__name__)
 
-# MySQL Configuration
-db_config = {
-    'user': 'root',
-    'password': 'passwd', # password in mysql connection
-    'host': '127.0.0.1',
-    'database': 'userdb'
-}
+# Configurations for MySQL database connection
+app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
+app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
+app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
+app.config['MYSQL_DB'] = os.getenv('MYSQL_DATABASE')
 
-# Helper function to connect to the database
-def get_db_connection():
-    return mysql.connector.connect(**db_config)
+mysql = MySQL(app)
 
-@app.route('/user/', methods=['GET'])
-def get_users():
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM users")
+# Route for checking if the server is running
+@app.route('/')
+def home():
+    return "Server is running!"
+
+# Route for retrieving data from the database
+@app.route('/users', methods=['GET'])
+def fetch_users():
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT * FROM Users")
     users = cursor.fetchall()
     cursor.close()
-    conn.close()
     return jsonify(users)
 
-@app.route('/user/<int:uid>', methods=['GET'])
-def get_user(uid):
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM users WHERE uid = %s", (uid,))
-    user = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    if user:
-        return jsonify(user)
-    else:
-        return jsonify({'error': 'User not found'}), 404
-
-@app.route('/user/new', methods=['POST'])
+# Route for adding data to the database
+@app.route('/users', methods=['POST'])
 def create_user():
-    new_user = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (uid, name, age) VALUES (%s, %s, %s)",
-                   (new_user['uid'], new_user['name'], new_user['age']))
-    conn.commit()
+    user_data = request.json
+    cursor = mysql.connection.cursor()
+    cursor.execute("INSERT INTO Users (Fname, Age) VALUES (%s, %s)", 
+                   (user_data['name'], user_data['age']))
+    mysql.connection.commit()
     cursor.close()
-    conn.close()
-    return jsonify({'message': 'User created', 'uid': new_user['uid']}), 201
+    return jsonify({'message': 'User added successfully'})
 
-@app.route('/user/<int:uid>', methods=['PUT'])
-def update_user(uid):
-    update_data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET name = %s, age = %s WHERE uid = %s",
-                   (update_data['name'], update_data['age'], uid))
-    conn.commit()
+# Route for updating user data in the database
+@app.route('/users/<int:user_id>', methods=['PUT'])
+def update_user(user_id):
+    user_data = request.json
+    cursor = mysql.connection.cursor()
+    cursor.execute("UPDATE Users SET Fname = %s, Age = %s WHERE Uid = %s", 
+                   (user_data['name'], user_data['age'], user_id))
+    mysql.connection.commit()
     cursor.close()
-    conn.close()
-    return jsonify({'message': 'User updated'})
+    return jsonify({'message': 'User updated successfully'})
 
-@app.route('/user/<int:uid>', methods=['DELETE'])
-def delete_user(uid):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM users WHERE uid = %s", (uid,))
-    conn.commit()
+# Route for deleting user data from the database
+@app.route('/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    cursor = mysql.connection.cursor()
+    cursor.execute("DELETE FROM Users WHERE Uid = %s", (user_id,))
+    mysql.connection.commit()
     cursor.close()
-    conn.close()
-    return jsonify({'message': 'User deleted'})
+    return jsonify({'message': 'User deleted successfully'})
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Start the Flask application
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=os.getenv('PORT'), debug=True)
